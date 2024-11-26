@@ -7,7 +7,7 @@ pipeline {
         stage('Build') {
             steps {
                 sh 'mvn clean install'
-                sh 'docker build -t demo-app .'
+                sh 'sudo docker build -t demo-app .'
             }
         }
         stage('Deploy') {
