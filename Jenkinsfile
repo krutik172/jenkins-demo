@@ -13,10 +13,12 @@ pipeline {
         stage('Deploy') {
             steps {
                 script {
+                    echo "Checking for existing processes on port 8090..."
+                    sh 'lsof -i :8090 | grep LISTEN && kill -9 $(lsof -t -i :8090) || true'
                     echo "Deploying the application..."
                     sh 'docker stop demo-app || true'
                     sh 'docker rm demo-app || true'
-                    sh 'docker run -d --name demo-app -p 8090:8080 demo-app'
+                    sh 'docker run --rm -d --name demo-app -p 8090:8080 demo-app'
                 }
             }
         }
