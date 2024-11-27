@@ -31,7 +31,8 @@ pipeline {
                    for (int i = 0; i < retries; i++) {
                        try {
                            // Execute a curl inside the container (no need to have curl installed on the host)
-                           def response = sh(script: "docker exec demo-app curl -s -o /dev/null -w '%{http_code}' http://localhost:8089/health", returnStdout: true).trim()
+                           def response = sh(script: "curl -s -o /dev/null -w '%{http_code}' http://localhost:8089/health", returnStdout: true).trim()
+
                            if (response == '200') {
                                echo "Health check passed."
                                healthCheckSuccess = true
