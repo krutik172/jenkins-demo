@@ -26,7 +26,7 @@ pipeline {
             steps {
                 script {
                     echo "Performing health check..."
-                    def response = sh(script: "curl -s -o /dev/null -w '%{http_code}' http://localhost:8090/health", returnStdout: true).trim()
+                    def response = sh(script: "curl -s -o /dev/null -w '%{http_code}' http://localhost:8094/health", returnStdout: true).trim()
                     if (response != '200') {
                         echo "Health check failed. Rolling back..."
                         sh 'docker stop demo-app || true'
