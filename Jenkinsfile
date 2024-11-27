@@ -18,7 +18,7 @@ pipeline {
                     echo "Deploying the application..."
                     sh 'docker stop demo-app || true'
                     sh 'docker rm demo-app || true'
-                    sh 'docker run --rm -d --name demo-app -p 8090:8080 demo-app'
+                    sh 'docker run --rm -d --name demo-app -p 8094:8080 demo-app'
                 }
             }
         }
