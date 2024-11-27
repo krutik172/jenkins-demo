@@ -22,21 +22,38 @@ pipeline {
                 }
             }
         }
-        stage('Health Check') {
-            steps {
-                script {
-                    echo "Performing health check..."
-                    def response = sh(script: "curl -s -o /dev/null -w '%{http_code}' http://localhost:8089/health", returnStdout: true).trim()
-                    if (response != '200') {
-                        echo "Health check failed. Rolling back..."
-                        sh 'docker stop demo-app || true'
-                        sh 'docker rm demo-app || true'
-                        error("Rollback triggered due to health check failure.")
-                    } else {
-                        echo "Health check passed."
-                    }
-                }
-            }
-        }
+       stage('Health Check') {
+           steps {
+               script {
+                   echo "Performing health check by executing a command inside the container..."
+                   def retries = 5
+                   def healthCheckSuccess = false
+                   for (int i = 0; i < retries; i++) {
+                       try {
+                           // Execute a curl inside the container (no need to have curl installed on the host)
+                           def response = sh(script: "docker exec demo-app curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/health", returnStdout: true).trim()
+                           if (response == '200') {
+                               echo "Health check passed."
+                               healthCheckSuccess = true
+                               break
+                           } else {
+                               echo "Health check failed, retrying... (${i+1}/$retries)"
+                               sleep(5)
+                           }
+                       } catch (Exception e) {
+                           echo "Error during health check: ${e.getMessage()}"
+                           sleep(5)
+                       }
+                   }
+
+                   if (!healthCheckSuccess) {
+                       echo "Health check failed after $retries retries. Rolling back..."
+                       sh 'docker stop demo-app || true'
+                       sh 'docker rm demo-app || true'
+                       error("Rollback triggered due to health check failure.")
+                   }
+               }
+           }
+       }
     }
 }
