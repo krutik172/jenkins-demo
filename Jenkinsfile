@@ -13,12 +13,12 @@ pipeline {
         stage('Deploy') {
             steps {
                 script {
-                    echo "Checking for existing processes on port 8090..."
-                    sh 'lsof -i :8090 | grep LISTEN && kill -9 $(lsof -t -i :8090) || true'
+                    echo "Checking for existing processes on port 8089..."
+                    sh 'lsof -i :8089 | grep LISTEN && kill -9 $(lsof -t -i :8089) || true'
                     echo "Deploying the application..."
                     sh 'docker stop demo-app || true'
                     sh 'docker rm demo-app || true'
-                    sh 'docker run --rm -d --name demo-app -p 8094:8080 demo-app'
+                    sh 'docker run --rm -d --name demo-app -p 8089:8089 demo-app'
                 }
             }
         }
@@ -26,7 +26,7 @@ pipeline {
             steps {
                 script {
                     echo "Performing health check..."
-                    def response = sh(script: "curl -s -o /dev/null -w '%{http_code}' http://localhost:8094/health", returnStdout: true).trim()
+                    def response = sh(script: "curl -s -o /dev/null -w '%{http_code}' http://localhost:8089/health", returnStdout: true).trim()
                     if (response != '200') {
                         echo "Health check failed. Rolling back..."
                         sh 'docker stop demo-app || true'
