@@ -1,8 +1,14 @@
 pipeline {
     agent any
-       tools {
-            jdk 'JDK21'
-       }
+    tools {
+        jdk 'JDK21'
+    }
+    environment {
+        MAX_RETRIES = 5
+        HEALTH_CHECK_URL = "http://localhost:8089/health"
+        BACKUP_IMAGE = "demo-app-stable" // Backup stable image for fallback
+        NOTIFICATION_EMAIL = "team@example.com"
+    }
     stages {
         stage('Build') {
             steps {
@@ -22,39 +28,76 @@ pipeline {
                 }
             }
         }
-       stage('Health Check') {
-           steps {
-               script {
-                   echo "Performing health check by executing a command inside the container..."
-                   def retries = 5
-                   def healthCheckSuccess = false
-                   for (int i = 0; i < retries; i++) {
-                       try {
-                           // Execute a curl inside the container (no need to have curl installed on the host)
-                           def response = sh(script: "curl -s -o /dev/null -w '%{http_code}' http://localhost:8089/health", returnStdout: true).trim()
+        stage('Health Check') {
+            steps {
+                script {
+                    echo "Performing health check by executing a command inside the container..."
+                    def retries = env.MAX_RETRIES.toInteger()
+                    def healthCheckSuccess = false
 
-                           if (response == '200') {
-                               echo "Health check passed."
-                               healthCheckSuccess = true
-                               break
-                           } else {
-                               echo "Health check failed, retrying... (${i+1}/$retries)"
-                               sleep(5)
-                           }
-                       } catch (Exception e) {
-                           echo "Error during health check: ${e.getMessage()}"
-                           sleep(5)
-                       }
-                   }
+                    for (int i = 0; i < retries; i++) {
+                        try {
+                            def response = sh(script: "curl -s -o /dev/null -w '%{http_code}' ${env.HEALTH_CHECK_URL}", returnStdout: true).trim()
+                            if (response == '200') {
+                                echo "Health check passed."
+                                healthCheckSuccess = true
+                                break
+                            } else {
+                                echo "Health check failed, retrying... (${i+1}/$retries)"
+                                sleep(5)
+                            }
+                        } catch (Exception e) {
+                            echo "Error during health check: ${e.getMessage()}"
+                            sleep(5)
+                        }
+                    }
 
-                   if (!healthCheckSuccess) {
-                       echo "Health check failed after $retries retries. Rolling back..."
-                       sh 'docker stop demo-app || true'
-                       sh 'docker rm demo-app || true'
-                       error("Rollback triggered due to health check failure.")
-                   }
-               }
-           }
-       }
+                    if (!healthCheckSuccess) {
+                        echo "Health check failed after $retries retries. Rolling back..."
+                        performRollback()
+                        error("Pipeline failed: Rollback triggered due to health check failure.")
+                    }
+                }
+            }
+        }
+        stage('Fallback Deploy') {
+            when {
+                expression {
+                    currentBuild.result == 'FAILURE'
+                }
+            }
+            steps {
+                script {
+                    echo "Deploying fallback version..."
+                    sh 'docker stop demo-app || true'
+                    sh 'docker rm demo-app || true'
+                    sh "docker run --rm -d --name demo-app -p 8089:8089 ${env.BACKUP_IMAGE}"
+                }
+            }
+        }
     }
+    post {
+        always {
+            script {
+                archiveArtifacts artifacts: '**/target/*.jar', onlyIfSuccessful: true
+                cleanWs()
+            }
+        }
+        failure {
+            script {
+                notifyFailure(env.NOTIFICATION_EMAIL)
+            }
+        }
+    }
+}
+
+def performRollback() {
+    echo "Stopping and removing the application container..."
+    sh 'docker stop demo-app || true'
+    sh 'docker rm demo-app || true'
+}
+
+def notifyFailure(email) {
+    echo "Sending failure notification to ${email}..."
+    // Add email or Slack notification logic here
 }
