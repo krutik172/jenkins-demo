@@ -1,32 +1,88 @@
-name: Deploy and Health Check
+name: Self-Healing Pipeline
+
 on:
   push:
     branches:
       - main
 
+env:
+  MAX_RETRIES: 5
+  HEALTH_CHECK_URL: "http://localhost:8089/health"
+  BACKUP_IMAGE: "demo-app-stable"
+  NOTIFICATION_EMAIL: "team@example.com"
+
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Code
+      # Step 1: Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Build Docker Image
-        run: docker build -t my-app .
+      # Step 2: Set Up Java and Docker
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          java-version: '21'
 
-      - name: Deploy Application
-        run: docker run -d --name app -p 8089:8089 my-appj
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v2
 
-      - name: Health Check
+      # Step 3: Build Application
+      - name: Build Application
         run: |
-          for i in {1..5}; do
-            if curl -s -o /dev/null -w "%{http_code}" http://localhost:8089/health | grep 200; then
+          mvn clean install
+          docker build -t demo-app .
+
+      # Step 4: Deploy Application
+      - name: Deploy Application
+        run: |
+          echo "Checking for existing processes on port 8089..."
+          lsof -i :8089 | grep LISTEN && kill -9 $(lsof -t -i :8089) || true
+          echo "Deploying application..."
+          docker stop demo-app || true
+          docker rm demo-app || true
+          docker run --rm -d --name demo-app -p 8089:8089 demo-app
+
+      # Step 5: Health Check
+      - name: Health Check
+        id: health-check
+        run: |
+          echo "Starting health check..."
+          retries=$MAX_RETRIES
+          health_check_success=false
+          
+          for ((i=1; i<=retries; i++)); do
+            response=$(curl -s -o /dev/null -w "%{http_code}" $HEALTH_CHECK_URL)
+            if [ "$response" == "200" ]; then
               echo "Health check passed."
-              exit 0
+              health_check_success=true
+              break
+            else
+              echo "Health check failed, retrying... ($i/$retries)"
+              sleep 5
             fi
-            sleep 5
           done
-          echo "Health check failed. Rolling back..."
-          docker stop app || true
-          docker rm app || true
-          exit 1
+
+          if [ "$health_check_success" != "true" ]; then
+            echo "Health check failed. Triggering rollback..."
+            docker stop demo-app || true
+            docker rm demo-app || true
+            exit 1
+          fi
+
+      # Step 6: Fallback Deployment (Triggered on Health Check Failure)
+      - name: Deploy Fallback Version
+        if: failure()
+        run: |
+          echo "Deploying fallback version..."
+          docker stop demo-app || true
+          docker rm demo-app || true
+          docker run --rm -d --name demo-app -p 8089:8089 $BACKUP_IMAGE
+
+      # Step 7: Notify on Failure
+      - name: Notify Team on Failure
+        if: failure()
+        run: |
+          echo "Sending failure notification to $NOTIFICATION_EMAIL"

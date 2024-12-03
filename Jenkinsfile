@@ -6,7 +6,7 @@ pipeline {
     environment {
         MAX_RETRIES = 5
         HEALTH_CHECK_URL = "http://localhost:8089/health"
-        BACKUP_IMAGE = "demo-app-stable" // Backup stable image for fallback
+        BACKUP_IMAGE = "demo-app-stable"
         NOTIFICATION_EMAIL = "team@example.com"
     }
     stages {
@@ -99,5 +99,4 @@ def performRollback() {
 
 def notifyFailure(email) {
     echo "Sending failure notification to ${email}..."
-    // Add email or Slack notification logic here
 }

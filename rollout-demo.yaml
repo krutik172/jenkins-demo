@@ -1,28 +1,39 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Rollout
 metadata:
-  name: demo-rollout
-  namespace: argo-rollouts
+  name: demo-app-rollout
 spec:
   replicas: 3
-  revisionHistoryLimit: 2
-  selector:
-    matchLabels:
-      app: demo
-  template:
-    metadata:
-      labels:
-        app: demo
-    spec:
-      containers:
-        - name: demo
-          image: nginx:1.21
-          ports:
-            - containerPort: 80
   strategy:
     canary:
       steps:
-        - setWeight: 20
+        - setWeight: 25
         - pause: { duration: 30s }
         - setWeight: 50
-        - pause: { duration: 30s }
+        - pause: { duration: 60s }
+  template:
+    metadata:
+      labels:
+        app: demo-app
+    spec:
+      containers:
+        - name: demo-app
+          image: demo-app:latest
+          ports:
+            - containerPort: 8089
+  analysis:
+    templates:
+      - templateName: health-check-template
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: health-check-template
+spec:
+  metrics:
+    - name: http-health-check
+      successCondition: "result == '200'"
+      provider:
+        web:
+          url: http://localhost:8089/health
