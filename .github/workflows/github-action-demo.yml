@@ -39,8 +39,6 @@ jobs:
       # Step 4: Deploy Application
       - name: Deploy Application
         run: |
-          echo "Checking for existing processes on port 8089..."
-          lsof -i :8089 | grep LISTEN && kill -9 $(lsof -t -i :8089) || true
           echo "Deploying application..."
           docker stop demo-app || true
           docker rm demo-app || true
@@ -62,7 +60,7 @@ jobs:
               break
             else
               echo "Health check failed, retrying... ($i/$retries)"
-              sleep 5
+              sleep 10
             fi
           done
 
