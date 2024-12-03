@@ -7,7 +7,7 @@ on:
 
 env:
   MAX_RETRIES: 5
-  HEALTH_CHECK_URL: "http://localhost:8089/health"
+  HEALTH_CHECK_URL: "http://localhost:8090/health"
   BACKUP_IMAGE: "demo-app-stable"
   NOTIFICATION_EMAIL: "team@example.com"
 
@@ -44,7 +44,7 @@ jobs:
           echo "Deploying application..."
           docker stop demo-app || true
           docker rm demo-app || true
-          docker run --rm -d --name demo-app -p 8089:8089 demo-app
+          docker run --rm -d --name demo-app -p 8090:8090 demo-app
 
       # Step 5: Health Check
       - name: Health Check
