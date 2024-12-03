@@ -1,0 +1,32 @@
+name: Deploy and Health Check
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Build Docker Image
+        run: docker build -t my-app .
+
+      - name: Deploy Application
+        run: docker run -d --name app -p 8089:8089 my-appj
+
+      - name: Health Check
+        run: |
+          for i in {1..5}; do
+            if curl -s -o /dev/null -w "%{http_code}" http://localhost:8089/health | grep 200; then
+              echo "Health check passed."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Health check failed. Rolling back..."
+          docker stop app || true
+          docker rm app || true
+          exit 1
