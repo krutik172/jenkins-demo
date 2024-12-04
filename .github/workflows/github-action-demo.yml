@@ -39,9 +39,16 @@ jobs:
       - name: Deploy Application
         run: |
           echo "Deploying application..."
-          docker stop demo-app || true
-          docker rm demo-app || true
+          
+          # Check if the container is running, stop and remove it only if it's running
+          if [ "$(docker ps -q -f name=demo-app)" ]; then
+            docker stop demo-app
+            docker rm demo-app
+          fi
+          
+          # Now run the new container
           docker run --rm -d --name demo-app -p 8090:8090 demo-app
+
 
       # Step 5: Health Check
       - name: Health Check
