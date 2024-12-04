@@ -1,91 +1,52 @@
-name: Self-Healing Pipeline
+name: Self-Healing Java App on Docker
 
 on:
   push:
     branches:
-      - main
-
-env:
-  HEALTH_CHECK_URL: "http://localhost:8090/health"
-  BACKUP_IMAGE: "demo-app-stable"
-  NOTIFICATION_EMAIL: "team@example.com"
+      - main  # Trigger on changes to the main branch
+  workflow_dispatch: # Allow manual trigger
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout Code
-      - name: Checkout Repository
+
+      # Step 1: Checkout the repository
+      - name: Checkout code
         uses: actions/checkout@v3
 
-      # Step 2: Set Up JDK
+      # Step 2: Set up JDK 21
       - name: Set up JDK 21
         uses: actions/setup-java@v3
         with:
           java-version: '21'
-          distribution: 'temurin'
 
-      - name: Set up Docker
-        uses: docker/setup-buildx-action@v2
-
-      # Step 3: Build Application and Docker Image
-      - name: Build Application
+      # Step 3: Build Docker image for the application
+      - name: Build Docker image
         run: |
-          mvn clean install
-          docker build -t demo-app .
+          docker build -t my-java-app .
 
-      - name: Deploy Application
+      # Step 4: Run Docker container for the application
+      - name: Run Docker container
         run: |
-          echo "Deploying application..."
+          docker run -d --name my-java-app-container -p 8090:8090 my-java-app
+
+      # Step 5: Monitor the health of the application and restart the container if necessary
+      - name: Monitor and heal application
+        run: |
+          # Check the health of the container by sending a simple request to the app
+          while true; do
+            echo "Checking if the app is alive..."
           
-          # Check if the container is running, stop and remove it only if it's running
-          if [ "$(docker ps -q -f name=demo-app)" ]; then
-            docker stop demo-app
-            docker rm demo-app
-          fi
+            # Send a request to check if the application is healthy
+            if ! curl --silent --fail http://localhost:8090/health; then
+              echo "App is down. Restarting the container..."
+              docker restart my-java-app-container
+            else
+              echo "App is healthy."
+            fi
           
-          docker run --rm -d --name demo-app -p 8090:8090 demo-app
-          
-          echo "Waiting for the application to start..."
-          sleep 15  # Wait for 15 seconds (adjust as necessary)
-          
-          response=$(curl -s -o /dev/null -w "%{http_code}" $HEALTH_CHECK_URL)
-          if [ "$response" != "200" ]; then
-            echo "Health check failed, triggering rollback..."
-            docker stop demo-app || true
-            docker rm demo-app || true
-            exit 1
-          else
-            echo "Health check passed."
-          fi
-
-      # Step 5: Health Check
-      - name: Health Check
-        id: health-check
-        run: |
-          echo "Performing health check..."
-          response=$(curl -s -o /dev/null -w "%{http_code}" $HEALTH_CHECK_URL)
-          if [ "$response" != "200" ]; then
-            echo "Health check failed, triggering rollback..."
-            docker stop demo-app || true
-            docker rm demo-app || true
-            exit 1
-          else
-            echo "Health check passed."
-          fi
-
-      # Step 6: Fallback Deployment (Triggered on Health Check Failure)
-      - name: Deploy Fallback Version
-        if: failure()
-        run: |
-          echo "Deploying fallback version..."
-          docker stop demo-app || true
-          docker rm demo-app || true
-          docker run --rm -d --name demo-app -p 8090:8090 $BACKUP_IMAGE
-
-      # Step 7: Notify Team on Failure
-      - name: Notify Team on Failure
-        if: failure()
-        run: |
-          echo "Sending failure notification to $NOTIFICATION_EMAIL"
+            # Sleep for a period (e.g., 30 seconds) before checking again
+            sleep 30
+          done
