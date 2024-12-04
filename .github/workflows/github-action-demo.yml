@@ -35,7 +35,6 @@ jobs:
           mvn clean install
           docker build -t demo-app .
 
-      # Step 4: Deploy Application
       - name: Deploy Application
         run: |
           echo "Deploying application..."
@@ -46,9 +45,20 @@ jobs:
             docker rm demo-app
           fi
           
-          # Now run the new container
           docker run --rm -d --name demo-app -p 8090:8090 demo-app
-
+          
+          echo "Waiting for the application to start..."
+          sleep 15  # Wait for 15 seconds (adjust as necessary)
+          
+          response=$(curl -s -o /dev/null -w "%{http_code}" $HEALTH_CHECK_URL)
+          if [ "$response" != "200" ]; then
+            echo "Health check failed, triggering rollback..."
+            docker stop demo-app || true
+            docker rm demo-app || true
+            exit 1
+          else
+            echo "Health check passed."
+          fi
 
       # Step 5: Health Check
       - name: Health Check
