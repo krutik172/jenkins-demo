@@ -6,7 +6,6 @@ on:
       - main
 
 env:
-  MAX_RETRIES: 5
   HEALTH_CHECK_URL: "http://localhost:8090/health"
   BACKUP_IMAGE: "demo-app-stable"
   NOTIFICATION_EMAIL: "team@example.com"
@@ -20,7 +19,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      # Step 2: Set Up JDK (Try using JDK 17 instead of 21)
+      # Step 2: Set Up JDK
       - name: Set up JDK 21
         uses: actions/setup-java@v3
         with:
@@ -48,27 +47,15 @@ jobs:
       - name: Health Check
         id: health-check
         run: |
-          echo "Starting health check..."
-          retries=$MAX_RETRIES
-          health_check_success=false
-          
-          for ((i=1; i<=retries; i++)); do
-            response=$(curl -s -o /dev/null -w "%{http_code}" $HEALTH_CHECK_URL)
-            if [ "$response" == "200" ]; then
-              echo "Health check passed."
-              health_check_success=true
-              break
-            else
-              echo "Health check failed, retrying... ($i/$retries)"
-              sleep 10
-            fi
-          done
-
-          if [ "$health_check_success" != "true" ]; then
-            echo "Health check failed after $MAX_RETRIES retries. Triggering rollback..."
+          echo "Performing health check..."
+          response=$(curl -s -o /dev/null -w "%{http_code}" $HEALTH_CHECK_URL)
+          if [ "$response" != "200" ]; then
+            echo "Health check failed, triggering rollback..."
             docker stop demo-app || true
             docker rm demo-app || true
             exit 1
+          else
+            echo "Health check passed."
           fi
 
       # Step 6: Fallback Deployment (Triggered on Health Check Failure)
@@ -78,7 +65,7 @@ jobs:
           echo "Deploying fallback version..."
           docker stop demo-app || true
           docker rm demo-app || true
-          docker run --rm -d --name demo-app -p 8089:8089 $BACKUP_IMAGE
+          docker run --rm -d --name demo-app -p 8090:8090 $BACKUP_IMAGE
 
       # Step 7: Notify Team on Failure
       - name: Notify Team on Failure
