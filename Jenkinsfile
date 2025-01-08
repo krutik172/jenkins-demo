@@ -1,8 +1,5 @@
 pipeline {
     agent any
-    tools {
-        jdk 'JDK21'
-    }
     environment {
         MAX_RETRIES = 5
         HEALTH_CHECK_URL = "http://localhost:8089/health"

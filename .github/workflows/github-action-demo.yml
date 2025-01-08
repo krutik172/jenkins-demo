@@ -1,38 +1,33 @@
-name: Self-Healing Java App on Docker
+name: Build and Deploy Self-Healing Java App on Docker
 
 on:
   push:
     branches:
-      - main  # Trigger on changes to the main branch
-  workflow_dispatch: # Allow manual trigger
+      - main  
+  workflow_dispatch: 
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-
-      # Step 1: Checkout the repository
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Step 2: Set up JDK 21
       - name: Set up JDK 21
         uses: actions/setup-java@v3
         with:
           java-version: '21'
+          distribution: 'temurin'
 
-      # Step 3: Build Docker image for the application
       - name: Build Docker image
         run: |
-          docker build -t my-java-app .
+          docker build -t demo-app .
 
-      # Step 4: Run Docker container for the application
       - name: Run Docker container
         run: |
-          docker run -d --name my-java-app-container -p 8090:8090 my-java-app
+          docker run --rm -d --name demo-app -p 8090:8090 demo-app
 
-      # Step 5: Monitor the health of the application and restart the container if necessary
       - name: Monitor and heal application
         run: |
           # Check the health of the container by sending a simple request to the app
@@ -41,8 +36,19 @@ jobs:
           
             # Send a request to check if the application is healthy
             if ! curl --silent --fail http://localhost:8090/health; then
-              echo "App is down. Restarting the container..."
-              docker restart my-java-app-container
+              echo "App is down. Capturing logs and restarting the container..."
+              
+              # Capture logs for diagnosis
+              docker logs demo-app > demo-app.log
+              
+              # Restart the container
+              docker restart demo-app
+              
+              # Check if the container restarted successfully
+              if [ "`docker inspect -f {{.State.Running}} demo-app`" != "true" ]; then
+                echo "Failed to restart the container. Exiting..."
+                exit 1
+              fi
             else
               echo "App is healthy."
             fi
