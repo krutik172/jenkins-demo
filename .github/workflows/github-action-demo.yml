@@ -20,39 +20,16 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
+      - name: Build the project
+        run: mvn clean install
+
       - name: Build Docker image
-        run: |
-          docker build -t demo-app .
+        run: docker build -t demo-app .
 
       - name: Run Docker container
-        run: |
-          docker run --rm -d --name demo-app -p 8090:8090 demo-app
+        run: docker run -d --name demo-app-container2 -p 8089:8089 demo-app
 
-      - name: Monitor and heal application
+      - name: Check if the app is running
         run: |
-          # Check the health of the container by sending a simple request to the app
-          while true; do
-            echo "Checking if the app is alive..."
-          
-            # Send a request to check if the application is healthy
-            if ! curl --silent --fail http://localhost:8090/health; then
-              echo "App is down. Capturing logs and restarting the container..."
-              
-              # Capture logs for diagnosis
-              docker logs demo-app > demo-app.log
-              
-              # Restart the container
-              docker restart demo-app
-              
-              # Check if the container restarted successfully
-              if [ "`docker inspect -f {{.State.Running}} demo-app`" != "true" ]; then
-                echo "Failed to restart the container. Exiting..."
-                exit 1
-              fi
-            else
-              echo "App is healthy."
-            fi
-          
-            # Sleep for a period (e.g., 30 seconds) before checking again
-            sleep 30
-          done
+          sleep 10
+          curl -f http://localhost:8089/health || (echo "App is not running" && exit 1)
